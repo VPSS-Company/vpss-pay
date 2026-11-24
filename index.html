@@ -1,0 +1,40 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>VPSS Pay — Sandbox Dashboard</title>
+<link rel="stylesheet" href="styles.css">
+</head>
+<body>
+<header class="topbar"><a class="brand" href="index.html"><span class="brandmark">V</span> VPSS <b>PAY</b></a><div class="topright"><span class="sandbox-pill" id="syncModePill">SANDBOX · NO REAL MONEY</span><span class="avatar">VP</span></div></header>
+<main class="wrap">
+  <section class="welcome"><div><p class="eyebrow">PAYMENT OPERATIONS</p><h1>Dashboard</h1><p class="muted">Create test payment links and monitor simulated transactions.</p></div><button class="primary" id="newLinkBtn">＋ Create payment link</button></section>
+  <section class="stats">
+    <article class="stat"><span>Total test payments</span><strong id="totalCount">0</strong><small>All sandbox attempts</small></article>
+    <article class="stat"><span>Successful test payments</span><strong id="successCount">0</strong><small>Simulated only</small></article>
+    <article class="stat"><span>Test amount received</span><strong id="totalAmount">₹0.00</strong><small>Not actual money</small></article>
+    <article class="stat"><span>Live updates</span><strong class="live"><i></i> Active</strong><small id="syncStatusText">Auto-refresh enabled</small></article>
+  </section>
+  <section class="panel create-panel" id="createPanel" hidden>
+    <div class="panel-head"><div><h2>Create a test payment link</h2><p class="muted">This creates a sandbox order only.</p></div><button class="icon-btn" id="closeCreate" aria-label="Close">✕</button></div>
+    <form id="linkForm" class="form-grid"><label>Payment description<input id="description" required maxlength="70" placeholder="e.g. Sample order"></label><label>Amount (INR)<input id="amount" type="number" min="1" max="100000" step="0.01" required placeholder="499.00"></label><div class="form-actions"><button class="primary" type="submit">Create test link</button></div></form>
+    <div id="createdLink" class="created-link" hidden></div>
+  </section>
+  <section class="panel">
+    <div class="panel-head">
+      <div><h2>Transactions</h2><p class="muted">Updates automatically when payments are simulated.</p></div>
+      <div class="action-group">
+        <button class="secondary small" id="exportBtn">Export CSV</button>
+        <button class="secondary small" id="clearTxBtn">Clear transactions</button>
+        <button class="secondary small danger-btn" id="resetAllBtn">Reset all data</button>
+      </div>
+    </div>
+    <div class="table-wrap"><table><thead><tr><th>Order</th><th>Customer</th><th>Method</th><th>Amount</th><th>Status</th><th>Time</th></tr></thead><tbody id="transactions"><tr><td colspan="6" class="empty">No test transactions yet. Create a link to get started.</td></tr></tbody></table></div>
+  </section>
+  <section class="panel sandbox-tools"><div class="panel-head"><div><h2>Developer sandbox</h2><p class="muted">Generate test events to check dashboard states.</p></div><span class="sandbox-pill">TEST TOOLS</span></div><div class="tool-row"><button class="secondary" data-status="success">＋ Test success</button><button class="secondary" data-status="failed">＋ Test failure</button><button class="secondary" data-status="pending">＋ Test pending</button><button class="secondary" data-status="cancelled">＋ Test cancelled</button></div></section>
+  <p class="footnote">VPSS Pay Sandbox is a learning prototype. It does not connect to banks, UPI apps, card networks, or payment processors. All transactions shown here are fictional test records.</p>
+</main>
+<div class="toast" id="toast" role="status"></div>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script src="app.js"></script>
+</body></html>
