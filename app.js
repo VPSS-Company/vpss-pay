@@ -1,6 +1,5 @@
 /* VPSS Pay Sandbox — all payment outcomes are simulated. No real payment data is processed. */
 (() => {
-  // Optional: Add your Supabase Project URL and Anon Key for cross-device QR sync
   const SUPABASE_URL = '';
   const SUPABASE_ANON_KEY = '';
 
@@ -37,7 +36,6 @@
     const local = readLocal();
     local.orders.unshift(order);
     writeLocal(local);
-
     if (sb) {
       await sb.from('sandbox_orders').insert({
         id: order.id,
@@ -52,7 +50,6 @@
   async function findOrder() {
     const orderId = params.get('order');
     if (!orderId) return null;
-
     if (sb) {
       const { data } = await sb.from('sandbox_orders').select('*').eq('id', orderId).maybeSingle();
       if (data) return { id: data.id, description: data.description, amount: data.amount, status: data.status };
@@ -72,11 +69,9 @@
       status,
       time: new Date().toISOString()
     };
-
     const local = readLocal();
     local.transactions.unshift(tx);
     writeLocal(local);
-
     if (sb) {
       await sb.from('sandbox_transactions').insert({
         id: tx.id,
@@ -117,17 +112,15 @@
     const local = readLocal();
     local.transactions = [];
     writeLocal(local);
-    if (sb) {
-      await sb.from('sandbox_transactions').delete().neq('id', '');
-    }
+    if (sb) await sb.from('sandbox_transactions').delete().not('id', 'is', null);
   }
 
   async function resetAllSandboxData() {
     localStorage.removeItem(KEY);
     window.dispatchEvent(new Event('vpss-updated'));
     if (sb) {
-      await sb.from('sandbox_transactions').delete().neq('id', '');
-      await sb.from('sandbox_orders').delete().neq('id', '');
+      await sb.from('sandbox_transactions').delete().not('id', 'is', null);
+      await sb.from('sandbox_orders').delete().not('id', 'is', null);
     }
   }
 
@@ -153,8 +146,9 @@
       const url = new URL('checkout.html', location.href);
       url.searchParams.set('order', order.id);
 
-      document.getElementById('createdLink').hidden = false;
-      document.getElementById('createdLink').innerHTML = `<b>Test payment link created</b><br><a href="${url.href}" target="_blank" rel="noopener">${escapeHtml(url.href)}</a> <button class="secondary small" id="copyLink">Copy link</button>`;
+      const createdLink = document.getElementById('createdLink');
+      createdLink.hidden = false;
+      createdLink.innerHTML = `<b>Test payment link created</b><br><a href="${url.href}" target="_blank" rel="noopener">${escapeHtml(url.href)}</a> <button class="secondary small" id="copyLink" type="button">Copy link</button>`;
       document.getElementById('copyLink').onclick = () => navigator.clipboard?.writeText(url.href).then(() => toast('Link copied')).catch(() => toast('Copy unavailable'));
       form.reset();
       await render();
@@ -247,15 +241,23 @@
     url.searchParams.set('order', order.id);
 
     const qr = document.getElementById('qrcode'), fallback = document.getElementById('qrFallback');
-    if (window.QRCode) {
+    if (window.QRCode && qr) {
+      qr.innerHTML = '';
       new QRCode(qr, { text: url.href, width: 168, height: 168, colorDark: '#172033', colorLight: '#ffffff', correctLevel: QRCode.CorrectLevel.M });
-      fallback.hidden = true;
+      if (fallback) fallback.hidden = true;
     }
 
+    // Fixed mapping: 'netbanking' -> 'bankPane'
+    const paneMap = { upi: 'upiPane', card: 'cardPane', netbanking: 'bankPane' };
     const methods = document.querySelectorAll('.method');
     methods.forEach(b => b.onclick = () => {
       methods.forEach(x => x.classList.toggle('active', x === b));
-      ['upi', 'card', 'netbanking'].forEach(m => document.getElementById(m + 'Pane').hidden = m !== b.dataset.method);
+      Object.entries(paneMap).forEach(([method, paneId]) => {
+        const pane = document.getElementById(paneId);
+        if (pane) pane.hidden = method !== b.dataset.method;
+      });
+      const msg = document.getElementById('checkoutMessage');
+      if (msg) msg.hidden = true;
     });
 
     document.getElementById('upiContinue').onclick = () => location.href = url.href;
@@ -266,16 +268,35 @@
       location.href = u.href;
     });
 
-    document.getElementById('cardForm').onsubmit = async e => {
-      e.preventDefault();
-      const inputs = e.currentTarget.querySelectorAll('input');
-      const cardholder = inputs[0].value.trim() || 'Test Customer';
-      const digits = inputs[1].value.replace(/\D/g, '');
-      const expiry = inputs[2].value.trim();
-      const cvv = inputs[3].value.replace(/\D/g, '');
+    const cardForm = document.getElementById('cardForm');
+    const cardInputs = cardForm.querySelectorAll('input');
+    // Auto-format card number spacing and MM/YY slash
+    cardInputs[1].addEventListener('input', e => {
+      const digits = e.target.value.replace(/\D/g, '').slice(0, 19);
+      e.target.value = digits.replace(/(.{4})/g, '$1 ').trim();
+    });
+    cardInputs[2].addEventListener('input', e => {
+      const digits = e.target.value.replace(/\D/g, '').slice(0, 4);
+      e.target.value = digits.length > 2 ? digits.slice(0, 2) + '/' + digits.slice(2) : digits;
+    });
 
-      if (digits.length < 12 || digits.length > 19 || !expiry || cvv.length < 3) {
-        showResult('Please enter a valid test card number (12–19 digits), expiry, and CVV.', true);
+    cardForm.onsubmit = async e => {
+      e.preventDefault();
+      const cardholder = cardInputs[0].value.trim() || 'Test Customer';
+      const digits = cardInputs[1].value.replace(/\D/g, '');
+      const expiry = cardInputs[2].value.trim();
+      const cvv = cardInputs[3].value.replace(/\D/g, '');
+
+      if (digits.length < 12 || digits.length > 19) {
+        showResult('Please enter a test card number between 12 and 19 digits.', true);
+        return;
+      }
+      if (!/^(0[1-9]|1[0-2])\/\d{2}$/.test(expiry)) {
+        showResult('Please enter a valid expiry in MM/YY format.', true);
+        return;
+      }
+      if (cvv.length < 3) {
+        showResult('Please enter a 3 or 4 digit test CVV.', true);
         return;
       }
 
@@ -283,7 +304,7 @@
       const last4 = digits.slice(-4);
       const t = await addTransaction(order, cardholder, `${brand} •••• ${last4}`, 'success');
       showResult(`Test payment successful. Transaction ${t.id} recorded for ${cardholder} (${brand} ending ${last4}).`);
-      e.currentTarget.reset();
+      cardForm.reset();
     };
   }
 
@@ -298,6 +319,12 @@
   async function initBank() {
     const form = document.getElementById('bankForm');
     if (!form) return;
+    const backLink = document.getElementById('backToCheckout');
+    const orderIdParam = params.get('order');
+    if (backLink) {
+      backLink.href = orderIdParam ? 'checkout.html?order=' + encodeURIComponent(orderIdParam) : 'index.html';
+    }
+
     const order = await findOrder();
     if (!order) {
       form.hidden = true;
@@ -311,7 +338,6 @@
     document.getElementById('bankAmount').textContent = money(order.amount);
     document.getElementById('bankPayAmount').textContent = money(order.amount);
     document.getElementById('bankOrderId').textContent = 'Order ID: ' + order.id + ' · ' + bankName;
-    document.getElementById('backToCheckout').href = 'checkout.html?order=' + encodeURIComponent(order.id);
 
     form.onsubmit = async e => {
       e.preventDefault();
@@ -329,6 +355,12 @@
   }
 
   async function initUpi() {
+    const backLink = document.getElementById('upiBack');
+    const orderIdParam = params.get('order');
+    if (backLink) {
+      backLink.href = orderIdParam ? 'checkout.html?order=' + encodeURIComponent(orderIdParam) : 'index.html';
+    }
+
     const order = await findOrder();
     if (!order) {
       document.getElementById('upiTitle').textContent = 'Test order not found';
